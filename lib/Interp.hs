@@ -1,14 +1,18 @@
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE DeriveFunctor #-}
 module Interp where
 
-import           Term as T
+import Control.Applicative
+import Data.Functor
+import Term                as T
 
-data Result
-    = Step Term -- ^ The term reduces.
+data Result t
+    = Step t -- ^ The term reduces.
     | Stop -- ^ The term is HNF.
     | Stuck -- ^ The term is stuck.
-  deriving (Show)
+  deriving (Show, Functor)
 
-step :: Term -> Result
+step :: Term -> Result Term
 step t =
     case t of
       Var i -> Stop
@@ -101,11 +105,65 @@ step t =
       Coi t -> Stop
 #endif
 
+-- | Take a step and inject the result into 'Maybe'.
+safeStep :: Term -> Maybe Term
+safeStep t =
+    case step t of
+      Stuck -> Nothing
+      Stop -> Just t
+      Step t' -> Just t'
+
+-- | Step the subterms of a term in 'Maybe'.
+deepStep :: Term -> Maybe Term
+deepStep t = safeStep t >>= \t' ->
+    case t' of
+      Var i -> pure t'
+      Lam b -> Lam <$> deepStep b
+      Ap f a -> Ap <$> deepStep f <*> deepStep a
+      Pi a b -> Pi <$> deepStep a <*> deepStep b
+      Pair a b -> Pair <$> deepStep a <*> deepStep b
+      Fst e -> Fst <$> deepStep e
+      Snd e -> Snd <$> deepStep e
+      Sigma a b -> Sigma <$> deepStep a <*> deepStep b
+      Zero -> pure t'
+      Succ e -> Succ <$> deepStep e
+      NatRec n z s -> NatRec <$> deepStep n <*> deepStep z <*> deepStep s
+      Nat -> pure t'
+      TT -> pure t'
+      Unit -> pure t'
+      Eq a b t -> Eq <$> deepStep a <*> deepStep b <*> deepStep t
+      CEq a b -> CEq <$> deepStep a <*> deepStep b
+      Base -> pure t'
+      Uni i -> pure t'
+      Per t -> Per <$> deepStep t
+      Fix e -> deepStep (subst t 0 e)
+#ifdef FLAG_coind
+      Abort e -> Abort <$> deepStep e
+      InL e -> InL <$> deepStep e
+      InR e -> InR <$> deepStep e
+      Sum a b -> Sum <$> deepStep a <*> deepStep b
+      Case e l r -> Case <$> deepStep e <*> deepStep l <*> deepStep r
+      Void -> pure t'
+
+      Map t v f -> Map <$> deepStep t <*> deepStep v <*> deepStep f
+
+      Fold t e -> Fold <$> deepStep t <*> deepStep e
+      Rec t r e -> Rec <$> deepStep t <*> deepStep r <*> deepStep e
+      Ind t -> Ind <$> deepStep t
+
+      Unfold t e -> Unfold <$> deepStep t <*> deepStep e
+      Gen t r e -> Gen <$> deepStep t <*> deepStep r <*> deepStep e
+      Coi t -> Coi <$> deepStep t
+#endif
+
 -- | Step terms in parallel and under binding forms.
 --
 -- This is the form that will be used by most tactics.
 parallelStep :: Term -> Maybe Term
-parallelStep = undefined
+parallelStep e =
+    case deepStep e of
+      Just e' | e /= e' -> Just e'
+      _                 -> Nothing
 
 -- | Run a term until it reaches head normal form or becomes stuck.
 run :: Term -> Maybe Term
@@ -118,5 +176,6 @@ run e = case step e of
 normalize :: Term -> Maybe Term
 normalize e =
     case parallelStep e of
-      Just e' -> if e == e' then Just e' else normalize e'
+      Just e' | e == e' -> Just e'
+              | otherwise -> normalize e'
       Nothing -> Nothing

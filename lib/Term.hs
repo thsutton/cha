@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP #-}
 module Term where
 
-import           Data.Monoid hiding (Sum)
-import qualified Data.Set    as Set
+import           Control.Applicative
+import           Control.Monad.State hiding (lift)
+import           Data.Functor
+import           Data.Monoid         hiding (Sum)
+import qualified Data.Set            as Set
 
 -- | Terms of the language.
 data Term
@@ -50,100 +54,260 @@ data Term
 #endif
   deriving (Show, Eq)
 
+data PrSt = PrSt { nameSupply :: [String], nameStack :: [String] }
+
+newName :: State PrSt String
+newName = do
+  PrSt (n:n') s <- get
+  put (PrSt n' (n:s))
+  return n
+
+boundName :: Int -> State PrSt String
+boundName i = do
+  s <- gets nameStack
+  return (s !! i)
+
+pretty :: Term -> String
+pretty t = pretty' ((\n -> "x" <> show n) <$> [1..]) t
+
+pretty' :: [String] -> Term -> String
+pretty' supply t = evalState (prettyPrint t) (PrSt supply [])
+
+scope :: State PrSt String -> State PrSt String
+scope sub = do
+  s <- get
+  n <- newName
+  t <- sub
+  put s
+  return $ n <> "." <> t
+
+prettyPrint :: Term -> State PrSt String
+prettyPrint t =
+    case t of
+      Var j -> boundName j
+      Lam b -> scope (prettyPrint b)
+      Ap f a -> do
+             f' <- prettyPrint f
+             a' <- prettyPrint a
+             return $ "(" <> f' <> " " <> a' <> ")"
+      Pi a b -> do
+             a' <- prettyPrint a
+             b' <- scope (prettyPrint b)
+             return $ "Pi(" <> a' <> ", " <> b' <> ")"
+      Pair a b -> do
+             a' <- prettyPrint a
+             b' <- prettyPrint b
+             return $ "(" <> a' <> ", " <> b' <> ")"
+      Fst p -> ("fst " <>) <$> prettyPrint p
+      Snd p -> ("snd " <>) <$> prettyPrint p
+      Sigma a b -> do
+             a' <- prettyPrint a
+             b' <- scope (prettyPrint b)
+             return $ "Sigma(" <> a' <> ", " <> b' <> ")"
+      Zero -> pure "Z"
+      Succ n -> do
+             n' <- prettyPrint n
+             return $ "S(" <> n' <> ")"
+      NatRec n z s -> do
+             n' <- prettyPrint n
+             z' <- scope (prettyPrint z)
+             s' <- scope (prettyPrint s)
+             return ("natrec(" <> n' <> "; "
+                                <> z' <> "; "
+                                <> s' <> ")")
+      Nat -> pure "Nat"
+      TT -> pure "TT"
+      Unit -> pure "Unit"
+      Eq a b t -> do
+             a' <- prettyPrint a
+             b' <- prettyPrint b
+             t' <- prettyPrint t
+             return ("eq(" <> a' <> "; " <> b' <> "; " <> t' <> ")")
+      CEq a b -> do
+             a' <- prettyPrint a
+             b' <- prettyPrint b
+             return ("ceq(" <> a' <> "; " <> b' <> ")")
+      Base -> pure "Base"
+      Uni i -> pure ("uni" <> show i)
+      Per p -> do
+             p' <- scope (scope (prettyPrint p))
+             return ("Per(" <> p' <> ")")
+      Fix f -> do
+             f' <- scope (prettyPrint f)
+             return ("fix(f. " <> f' <> ")")
+
+#ifdef FLAG_coind
+      --
+      -- Lift Sums
+      --
+      Abort a -> do
+        a' <- prettyPrint a
+        return $ "abort(" <> a' <> ")"
+      InL a -> do
+        a' <- prettyPrint a
+        return $ "InL(" <> a' <> ")"
+      InR a -> do
+        a' <- prettyPrint a
+        return $ "InR(" <> a' <> ")"
+      Sum a b -> do
+        a' <- prettyPrint a
+        b' <- prettyPrint b
+        return $ "Sum(" <> a' <> "; " <> b' <> ")"
+      Case a l r -> do
+        a' <- prettyPrint a
+        l' <- scope (prettyPrint l)
+        r' <- scope (prettyPrint r)
+        return $ "case(" <> a' <> "; " <> l' <> "; " <> r' <> ")"
+      Void -> pure "Void"
+
+      --
+      -- Lift Generic Map
+      --
+      Map t f e -> do
+        t' <- scope (prettyPrint t)
+        f' <- scope (prettyPrint f)
+        e' <- prettyPrint e
+        return $ "map{" <> t' <> "}(" <> f' <> "; " <> e' <> ")"
+
+      --
+      -- Lift Co/Inductive Types
+      --
+      Coi t -> do
+        t' <- scope (prettyPrint t)
+        return $ "coi(" <> t' <> ")"
+      Ind t -> do
+        t' <- scope (prettyPrint t)
+        return $ "ind(" <> t' <> ")"
+      Fold t e -> do
+        t' <- scope (prettyPrint t)
+        e' <- prettyPrint e
+        return $ "fold{" <> t' <> "}(" <> e' <> ")"
+      Rec t r e -> do
+            t' <- scope (prettyPrint t)
+            r' <- scope (prettyPrint r)
+            e' <- prettyPrint e
+            return $ "rec{" <> t' <> "}(" <> r' <> "; " <> e' <> ")"
+
+      Unfold t e -> do
+        t' <- scope (prettyPrint t)
+        e' <- prettyPrint e
+        return $ "unfold{" <> t' <> "}(" <> e' <> ")"
+      Gen t r e -> do
+        t' <- scope (prettyPrint t)
+        r' <- scope (prettyPrint r)
+        e' <- prettyPrint e
+        return $ "gen{" <> t' <> "}(" <> r' <> "; " <> e' <> ")"
+#endif
+
 lift :: Int -> Int -> Term -> Term
 lift target i tt =
     case tt of
       Var j | j < target -> Var j
             | otherwise  -> Var (j + i)
-      Lam b -> Lam (lift (target + 1) i b)
-      Ap f a -> Ap (lift target i f) (lift target i a)
-      Pi a b -> Pi (lift target i a) (lift (target + 1) i b)
+      Lam b -> Lam (liftBy 1 b)
+      Ap f a -> Ap (lft f) (lft a)
+      Pi a b -> Pi (lft a) (liftBy 1 b)
 
-      Pair a b -> Pair (lift target i a) (lift target i b)
-      Fst p -> Fst (lift target i p)
-      Snd p -> Snd (lift target i p)
-      Sigma a b -> Sigma (lift target i a) (lift (target + 1) i b)
+      Pair a b -> Pair (lft a) (lft b)
+      Fst p -> Fst (lft p)
+      Snd p -> Snd (lft p)
+      Sigma a b -> Sigma (lft a) (liftBy 1 b)
 
       Zero -> Zero
-      Succ n -> Succ (lift target i n)
-      NatRec n z s -> NatRec (lift target i n) (lift target i z)
-                             (lift (target + 2) i s)
+      Succ n -> Succ (lft n)
+      NatRec n z s -> NatRec (lft n) (lft z)
+                             (liftBy 2 s)
       Nat -> Nat
 
       TT -> TT
       Unit -> Unit
-      Eq a b t -> Eq (lift target i a) (lift target i b) (lift target i t)
-      CEq a b -> CEq (lift target i a) (lift target i b)
+      Eq a b t -> Eq (lft a) (lft b) (lft t)
+      CEq a b -> CEq (lft a) (lft b)
       Base -> Base
       Uni i -> Uni i
-      Per per -> Per (lift (target + 2) i per)
-      Fix e -> Fix (lift (target + 1) i e)
+      Per per -> Per (liftBy 2 per)
+      Fix e -> Fix (liftBy 1 e)
 
 #ifdef FLAG_coind
-      Abort a -> Abort (lift target i a)
-      InL a -> InL (lift target i a)
-      InR a -> InR (lift target i a)
-      Sum a b -> Sum (lift target i a) (lift target i b)
-      Case a l r -> Case (lift target i a) (lift (target + 1) i l) (lift (target + 1) i r)
+      --
+      -- Lift Sums
+      --
+      Abort a -> Abort (lft a)
+      InL a -> InL (lft a)
+      InR a -> InR (lft a)
+      Sum a b -> Sum (lft a) (lft b)
+      Case a l r -> Case (lft a) (liftBy 1 l) (liftBy 1 r)
       Void -> Void
 
-      Map t f e -> Map (lift (target + 1) i t) (lift (target + 1) i f) (lift target i e)
+      --
+      -- Lift Generic Map
+      --
+      Map t f e -> Map (liftBy 1 t) (liftBy 1 f) (lft e)
 
-      Fold t e -> Fold t (lift target i e)
-      Rec t r e -> Rec t (lift (target + 1) i r) (lift target i e)
-      Ind t -> Ind (lift (target + 1) i t)
-      Unfold t e -> Unfold t (lift target i e)
-      Gen t r e -> Gen t (lift (target + 1) i r) (lift target i e)
-      Coi t -> Coi (lift (target + 1) i t)
+      --
+      -- Lift Co/Inductive Types
+      --
+      Fold t e -> Fold (liftBy 1 t) (lft e)
+      Rec t r e -> Rec (liftBy 1 t) (liftBy 1 r) (lft e)
+      Ind t -> Ind (liftBy 1 t)
+      Unfold t e -> Unfold (liftBy 1 t) (lft e)
+      Gen t r e -> Gen (liftBy 1 t) (liftBy 1 r) (lft e)
+      Coi t -> Coi (liftBy 1 t)
 #endif
+  where
+    lft t = liftBy 0 t
+    liftBy n t = lift (target + n) i t
 
 lower :: Int -> Int -> Term -> Term
 lower target i tt =
     case tt of
       Var j | j < target -> Var j
             | otherwise -> Var (j - i)
-      Lam b -> Lam (lower (target + 1) i b)
-      Ap f a -> Ap (lower target i f) (lower target i f)
-      Pi a b -> Pi (lower target i a) (lower (target + 1) i b)
+      Lam b -> Lam (lowerBy 1 b)
+      Ap f a -> Ap (lwr f) (lwr f)
+      Pi a b -> Pi (lwr a) (lowerBy 1 b)
 
-      Pair a b -> Pair (lower target i a) (lower target i b)
-      Fst p -> Fst (lower target i p)
-      Snd p -> Snd (lower target i p)
-      Sigma a b -> Sigma (lower target i a) (lower (target + 1) i b)
+      Pair a b -> Pair (lwr a) (lwr b)
+      Fst p -> Fst (lwr p)
+      Snd p -> Snd (lwr p)
+      Sigma a b -> Sigma (lwr a) (lowerBy 1 b)
 
       Zero -> Zero
-      Succ n -> Succ (lower target i n)
-      NatRec n z s -> NatRec (lower target i n)
-                             (lower target i z)
-                             (lower (target + 2) i s)
+      Succ n -> Succ (lwr n)
+      NatRec n z s -> NatRec (lwr n)
+                             (lwr z)
+                             (lowerBy 2 s)
 
       TT -> TT
       Unit -> Unit
 
-      Eq a b t -> Eq (lower target i a) (lower target i b) (lower target i t)
-      CEq a b -> CEq (lower target i a) (lower target i b)
+      Eq a b t -> Eq (lwr a) (lwr b) (lwr t)
+      CEq a b -> CEq (lwr a) (lwr b)
       Base -> Base
       Uni i -> Uni i
-      Per per -> Per (lower (target + 2) i per)
-      Fix e -> Fix (lower (target + 1) i e)
+      Per per -> Per (lowerBy 2 per)
+      Fix e -> Fix (lowerBy 1 e)
 
 #ifdef FLAG_coind
-      Abort a -> Abort (lower target i a)
-      InL a -> InL (lower target i a)
-      InR a -> InR (lower target i a)
-      Sum a b -> Sum (lower target i a) (lower target i b)
-      Case a l r -> Case (lower target i a) (lower (target + 1) i l) (lower (target + 1) i r)
+      Abort a -> Abort (lwr a)
+      InL a -> InL (lwr a)
+      InR a -> InR (lwr a)
+      Sum a b -> Sum (lwr a) (lwr b)
+      Case a l r -> Case (lwr a) (lowerBy 1 l) (lowerBy 1 r)
       Void -> Void
 
-      Map t f e -> Map (lower (target + 1) i t) (lower (target + 1) i f) (lower target i e)
+      Map t f e -> Map (lowerBy 1 t) (lowerBy 1 f) (lwr e)
 
-      Fold t e -> Fold t (lower target i e)
-      Rec t r e -> Rec t (lower (target + 1) i r) (lower target i e)
-      Ind t -> Ind (lower (target + 1) i t)
-      Unfold t e -> Unfold t (lower target i e)
-      Gen t r e -> Gen t (lower (target + 1) i r) (lower target i e)
-      Coi t -> Coi (lower (target + 1) i t)
+      Fold t e -> Fold (lowerBy 1 t) (lwr e)
+      Rec t r e -> Rec (lowerBy 1 t) (lowerBy 1 r) (lwr e)
+      Ind t -> Ind (lowerBy 1 t)
+      Unfold t e -> Unfold (lowerBy 1 t) (lwr e)
+      Gen t r e -> Gen (lowerBy 1 t) (lowerBy 1 r) (lwr e)
+      Coi t -> Coi (lowerBy 1 t)
 #endif
+  where
+    lowerBy n t = lower (target + n) i t
+    lwr t = lowerBy 0 t
 
 -- | Given a term, an index, and a second term, replace all
 -- occurrences of the index in second term with the first term.
@@ -157,20 +321,20 @@ subst v i t =
           | j == i    -> v
           | j > i     -> Var (j - 1)
           | otherwise -> Var j
-      Lam b -> Lam (subst (lift 0 1 v) (i + 1) b)
+      Lam b -> Lam (lifted b)
       Ap f a -> Ap (subst v i f) (subst v i a)
-      Pi a b -> Pi (subst v i a) (subst (lift 0 1 v) (i + 1) b)
+      Pi a b -> Pi (subst v i a) (lifted b)
 
       Pair a b -> Pair (subst v i a) (subst v i b)
       Fst p -> Fst (subst v i p)
       Snd p -> Snd (subst v i p)
-      Sigma a b -> Sigma (subst v i a) (subst (lift 0 1 v) (i + 1) b)
+      Sigma a b -> Sigma (subst v i a) (lifted b)
 
       Zero -> Zero
       Succ e -> Succ (subst v i e)
       NatRec n z s -> NatRec (subst v i n)
                              (subst v i z)
-                             (subst (lift 0 2 v) (i + 2) s)
+                             (substBy 2 s)
       Nat -> Nat
 
       TT -> TT
@@ -180,25 +344,28 @@ subst v i t =
       CEq a b -> CEq (subst v i a) (subst v i b)
       Base -> Base
       Uni i -> Uni i
-      Per per -> Per (subst (lift 0 2 v) (i + 2) per)
-      Fix e -> Fix (subst (lift 0 1 v) (i + 1) e)
+      Per per -> Per (substBy 2 per)
+      Fix f -> Fix (lifted f)
 
 #ifdef FLAG_coind
       Abort a -> Abort (subst v i a)
       InL a -> InL (subst v i a)
       InR a -> InR (subst v i a)
       Sum a b -> Sum (subst v i a) (subst v i b)
-      Case a l r -> Case (subst v i a) (subst (lift 0 1 v) (i + 1) l) (subst (lift 0 1 v) (i + 1) r)
+      Case a l r -> Case (subst v i a) (lifted l) (lifted r)
       Void -> Void
-      Map t f e -> Map (subst (lift 0 1 v) (i + 1) t) (subst (lift 0 1 v) (i + 1) f) (subst v i e)
+      Map t f e -> Map (lifted t) (lifted f) (subst v i e)
 
-      Fold t e -> Fold t (subst v i e)
-      Rec t r e -> Rec t (subst (lift 0 1 v) (i + 1) r) (subst v i e)
-      Ind t -> Ind (subst (lift 0 1 v) (i + 1) t)
-      Unfold t e -> Unfold t (subst v i e)
-      Gen t r e -> Gen t (subst (lift 0 1 v) (i + 1) r) (subst v i e)
-      Coi t -> Coi (subst (lift 0 1 v) (i + 1) t)
+      Fold t e -> Fold (lifted t) (subst v i e)
+      Rec t r e -> Rec (lifted t) (lifted r) (subst v i e)
+      Ind t -> Ind (lifted t)
+      Unfold t e -> Unfold (lifted t) (subst v i e)
+      Gen t r e -> Gen (lifted t) (lifted r) (subst v i e)
+      Coi t -> Coi (lifted t)
 #endif
+  where
+    lifted t = substBy 1 t
+    substBy n t = subst (lift 0 n v) (i + n) t
 
 -- | List the free variables in a term.
 freevars :: Term -> [Int]
@@ -209,13 +376,16 @@ freevars t = Set.toList (go 0 t)
           Var i -> if i < c then mempty else Set.singleton (i - c)
           Lam b -> go (c + 1) b
           Ap f a -> go c f <> go c a
+
           Pi a b -> go c a <> go (c + 1) b
           Pair l r -> go c l <> go c r
           Fst p -> go c p
           Snd p -> go c p
           Sigma a b -> go c a <> go (c + 1) b
+
           TT -> mempty
           Unit -> mempty
+
           Eq a b t -> go c a <> go c b <> go c t
           CEq a b -> go c a <> go c b
           Base -> mempty
@@ -229,11 +399,14 @@ freevars t = Set.toList (go 0 t)
           Sum a b -> go c a <> go c b
           Case e l r -> go c e <> go (c + 1) l <> go (c + 1) r
           Void -> mempty
+
           Map t f e -> go (c + 1) t <> go (c + 1) f <> go c e
-          Fold t e -> go c e
-          Rec t r e -> go (c + 1) r <> go c e
+
+          Fold t e -> go (c + 1) t <> go c e
+          Rec t r e -> go (c + 1) t <> go (c + 1) r <> go c e
           Ind t -> go (c + 1) t
-          Unfold t e -> go c e
-          Gen t r e -> go (c + 1) r <> go c e
+
+          Unfold t e -> go (c + 1) t <> go c e
+          Gen t r e -> go (c + 1) t <> go (c + 1) r <> go c e
           Coi t -> go (c + 1) t
 #endif
