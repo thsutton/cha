@@ -27,3 +27,11 @@ executable cha
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , mtl
+
+test-suite             hlint-check
+  default-language:    Haskell2010
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             hlint-check.hs
+  build-depends:       base
+                     , hlint

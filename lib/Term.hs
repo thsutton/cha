@@ -85,7 +85,7 @@ prettyPrint :: Term -> State PrSt String
 prettyPrint t =
     case t of
       Var j -> boundName j
-      Lam b -> scope (prettyPrint b)
+      Lam b -> (\b -> "lambda(" <> b <> ")") <$> scope (prettyPrint b)
       Ap f a -> do
              f' <- prettyPrint f
              a' <- prettyPrint a
@@ -93,17 +93,17 @@ prettyPrint t =
       Pi a b -> do
              a' <- prettyPrint a
              b' <- scope (prettyPrint b)
-             return $ "Pi(" <> a' <> ", " <> b' <> ")"
+             return $ "Pi(" <> a' <> "; " <> b' <> ")"
       Pair a b -> do
              a' <- prettyPrint a
              b' <- prettyPrint b
-             return $ "(" <> a' <> ", " <> b' <> ")"
-      Fst p -> ("fst " <>) <$> prettyPrint p
-      Snd p -> ("snd " <>) <$> prettyPrint p
+             return $ "(" <> a' <> "; " <> b' <> ")"
+      Fst p -> (\b -> "fst(" <> b <> ")") <$> prettyPrint p
+      Snd p -> (\b -> "snd(" <> b <> ")") <$> prettyPrint p
       Sigma a b -> do
              a' <- prettyPrint a
              b' <- scope (prettyPrint b)
-             return $ "Sigma(" <> a' <> ", " <> b' <> ")"
+             return $ "Sigma(" <> a' <> "; " <> b' <> ")"
       Zero -> pure "Z"
       Succ n -> do
              n' <- prettyPrint n

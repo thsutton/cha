@@ -33,25 +33,23 @@ step t =
                           Pair l r -> Step l
                           _ -> Stuck
       Snd e -> case step e of
-                 Step e' -> Step (Fst e')
+                 Step e' -> Step (Snd e')
                  Stuck -> Stuck
                  Stop -> case e of
                           Pair l r -> Step r
                           _ -> Stuck
-      Sigma a b -> case step a of
-                     Step a' -> Step (Sigma a' b)
-                     Stuck -> Stuck
-                     Stop -> Step (subst a 0 b)
+      Sigma a b -> Stop
 
       Zero -> Stop
       Succ s -> Stop
-      NatRec n z s -> case step n of
-                        Stuck -> Stuck
-                        Step n' -> Step (NatRec n' z s)
-                        Stop -> case n of
-                                  Zero -> Step z
-                                  Succ n' -> Step (subst (NatRec n' z s) 0 (subst (lift 0 1 n') 0 s))
-                                  _ -> Stuck
+      NatRec n z s ->
+          case step n of
+            Stuck -> Stuck
+            Step n' -> Step (NatRec n' z s)
+            Stop -> case n of
+                      Zero -> Step z
+                      Succ n' -> Step (subst (NatRec n' z s) 0 (subst (lift 0 1 n') 0 s))
+                      _ -> Stuck
       Nat -> Stop
 
       TT -> Stop
@@ -66,33 +64,37 @@ step t =
 #ifdef FLAG_coind
       InL l -> Stop
       InR r -> Stop
-      Case e l r -> case step e of
-                      Step e' -> Step (Case e' l r)
-                      Stuck -> Stuck
-                      Stop -> case e of
-                               InL v -> Step (subst v 0 l)
-                               InR v -> Step (subst v 0 r)
-                               _ -> Stuck
+      Sum l r -> Stop
+      Case e l r ->
+          case step e of
+            Stuck -> Stuck
+            Step e' -> Step (Case e' l r)
+            Stop -> case e of
+                      InL v -> Step (subst v 0 l)
+                      InR v -> Step (subst v 0 r)
+                      _ -> Stuck
       Void -> Stop
       Abort e -> Stuck
 
-      Map t r e -> case t of
-                     Var 0 -> Step (subst e 0 r)
-                     Unit -> Step e
-                     Sigma a b -> Step (Pair (Map a r (Fst e))
-                                             (Map (subst a 0 b) r (Snd e)) )
-                     Void -> Step (Abort e)
-                     Sum a b -> Step (Case e (InL (Map a (lift 2 0 r) (Var 0)) )
-                                             (InR (Map b (lift 2 0 r) (Var 0)) ))
-                     _ -> Stuck
+      Map t r e ->
+          case t of
+            Var 0 -> Step (subst e 0 r)
+            Unit -> Step e
+            Sigma a b -> Step $ Pair (Map a r (Fst e))
+                                     (Map (subst a 0 b) r (Snd e))
+            Void -> Step (Abort e)
+            Sum a b -> Step $ Case e (InL (Map a (lift 2 0 r) (Var 0)) )
+                                     (InR (Map b (lift 2 0 r) (Var 0)) )
+            _ -> Stuck
 
       Fold t e -> Stop
       Rec t e1 e -> case step e of
-                     Step e' -> Step (Rec t e1 e')
                      Stuck -> Stuck
+                     Step e' -> Step (Rec t e1 e')
                      Stop -> case e of
                                -- TODO needs some lift or lower or something.
-                               Fold t e2 -> Step (subst (Map t (Rec t e1 (Var 0)) e2) 0 e1)
+                               Fold t' e2 | t == t' ->
+                                              Step (subst (Map t (Rec t e1 (Var 0)) e2) 0 e1)
                                _ -> Stuck
       Ind t -> Stop
       Unfold t e -> case step e of
@@ -117,7 +119,7 @@ safeStep t =
 deepStep :: Term -> Maybe Term
 deepStep t = safeStep t >>= \t' ->
     case t' of
-      Var i -> pure t'
+      Var i -> pure (Var i)
       Lam b -> Lam <$> deepStep b
       Ap f a -> Ap <$> deepStep f <*> deepStep a
       Pi a b -> Pi <$> deepStep a <*> deepStep b
@@ -125,35 +127,35 @@ deepStep t = safeStep t >>= \t' ->
       Fst e -> Fst <$> deepStep e
       Snd e -> Snd <$> deepStep e
       Sigma a b -> Sigma <$> deepStep a <*> deepStep b
-      Zero -> pure t'
+      Zero -> pure Zero
       Succ e -> Succ <$> deepStep e
       NatRec n z s -> NatRec <$> deepStep n <*> deepStep z <*> deepStep s
-      Nat -> pure t'
-      TT -> pure t'
-      Unit -> pure t'
-      Eq a b t -> Eq <$> deepStep a <*> deepStep b <*> deepStep t
+      Nat -> pure Nat
+      TT -> pure TT
+      Unit -> pure Unit
+      Eq a b ty -> Eq <$> deepStep a <*> deepStep b <*> deepStep ty
       CEq a b -> CEq <$> deepStep a <*> deepStep b
-      Base -> pure t'
-      Uni i -> pure t'
-      Per t -> Per <$> deepStep t
-      Fix e -> deepStep (subst t 0 e)
+      Base -> pure Base
+      Uni i -> pure (Uni i)
+      Per per -> Per <$> deepStep per
+      Fix e -> deepStep (subst t' 0 e)
 #ifdef FLAG_coind
       Abort e -> Abort <$> deepStep e
       InL e -> InL <$> deepStep e
       InR e -> InR <$> deepStep e
       Sum a b -> Sum <$> deepStep a <*> deepStep b
       Case e l r -> Case <$> deepStep e <*> deepStep l <*> deepStep r
-      Void -> pure t'
+      Void -> pure Void
 
-      Map t v f -> Map <$> deepStep t <*> deepStep v <*> deepStep f
+      Map ty v f -> Map <$> deepStep ty <*> deepStep v <*> deepStep f
 
-      Fold t e -> Fold <$> deepStep t <*> deepStep e
-      Rec t r e -> Rec <$> deepStep t <*> deepStep r <*> deepStep e
-      Ind t -> Ind <$> deepStep t
+      Fold ty e -> Fold <$> deepStep ty <*> deepStep e
+      Rec ty r e -> Rec <$> deepStep ty <*> deepStep r <*> deepStep e
+      Ind ty -> Ind <$> deepStep ty
 
-      Unfold t e -> Unfold <$> deepStep t <*> deepStep e
-      Gen t r e -> Gen <$> deepStep t <*> deepStep r <*> deepStep e
-      Coi t -> Coi <$> deepStep t
+      Unfold ty e -> Unfold <$> deepStep ty <*> deepStep e
+      Gen ty r e -> Gen <$> deepStep ty <*> deepStep r <*> deepStep e
+      Coi ty -> Coi <$> deepStep ty
 #endif
 
 -- | Step terms in parallel and under binding forms.
@@ -162,8 +164,9 @@ deepStep t = safeStep t >>= \t' ->
 parallelStep :: Term -> Maybe Term
 parallelStep e =
     case deepStep e of
-      Just e' | e /= e' -> Just e'
-      _                 -> Nothing
+      Just e' | e == e'   -> Nothing
+              | otherwise -> Just e'
+      Nothing             -> Nothing
 
 -- | Run a term until it reaches head normal form or becomes stuck.
 run :: Term -> Maybe Term
@@ -176,6 +179,6 @@ run e = case step e of
 normalize :: Term -> Maybe Term
 normalize e =
     case parallelStep e of
-      Just e' | e == e' -> Just e'
+      Just e' | e == e'   -> Just e'
               | otherwise -> normalize e'
       Nothing -> Nothing
