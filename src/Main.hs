@@ -2,7 +2,15 @@
 module Main where
 
 import Data.Functor
+import Data.Monoid  hiding (Sum)
+
+import Derivation
+import Extract
+import Goal
 import Interp
+import Refiner
+import Rules
+import Tactic
 import Term
 
 #ifdef FLAG_coind
@@ -39,6 +47,20 @@ cases = [ Fst (Pair Unit TT)
 #endif
         ]
 
+mustProve :: String -> Term -> Tactic Derivation Goal -> Either String Term
+mustProve msg a b =
+    case prove a b of
+        Proved _ e -> Right e
+        Incomplete _ -> Left (msg <> ": got imcomplete!")
+        Failed -> Left (msg <> ": got failed!")
+
+mustFail :: String -> Term -> Tactic Derivation Goal -> Either String Term
+mustFail msg a b =
+    case prove a b of
+        Failed -> Right a
+        Incomplete _ -> Left (msg <> ": got incomplete!")
+        Proved _ _ -> Left (msg <> ": got proved!")
+
 testCase :: Term -> IO ()
 testCase t = do
   putStrLn "\nCASE"
@@ -47,5 +69,37 @@ testCase t = do
   print (pretty <$> deepStep t)
   putStrLn ""
 
+testProof :: (String -> Term -> Tactic Derivation Goal -> Either String Term)
+          -> String -> Term -> Tactic Derivation Goal -> IO ()
+testProof test name t tac = do
+    putStrLn ("\nCASE: " <> name)
+    print t
+    putStrLn (pretty t)
+    case test name t tac of
+        Right e -> putStrLn ("OK: " <> (pretty e))
+        Left  e -> putStrLn ("FAILED: " <> e)
+    putStrLn ""
+
+testProve = testProof mustProve
+testFail = testProof mustFail
+
 main :: IO ()
-main = mapM_ testCase cases
+main = do
+  mapM_ testCase cases
+
+  testProve "Base.Eq" (Eq Base Base (Uni 0)) eq
+  testProve "Base.Eq" (Eq Base Base (Uni 1)) eq
+  testProve "Base.MemEq" (Eq TT TT Base) (memEq `next` ceqRefl)
+  testProve "Base.MemEq"
+    (Eq (Ap (Lam (Var 0)) TT) TT Base)
+    (memEq `next` ceqStep `next` ceqRefl)
+
+  {-
+  testProve "Base.ElimEq"
+    (Pi (Eq TT Unit Base) (Ceq TT Unit))
+    (Pi.Intro 0 `splitTac`
+     [ Eq.Eq `splitTac` [Base.Eq, Base.MemEq `next` Ceq.Refl, Base.MemEq `next` Ceq.Refl]
+     , Base.ElimEq 0 `next` General.Hyp 0
+    ])
+  -}
+  putStrLn "Done!"
