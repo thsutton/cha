@@ -87,19 +87,19 @@ main :: IO ()
 main = do
   mapM_ testCase cases
 
-  testProve "Base.Eq" (Eq Base Base (Uni 0)) eq
-  testProve "Base.Eq" (Eq Base Base (Uni 1)) eq
-  testProve "Base.MemEq" (Eq TT TT Base) (memEq `next` ceqRefl)
+  testProve "Base.Eq" (Eq Base Base (Uni 0)) baseEQ
+  testProve "Base.Eq" (Eq Base Base (Uni 1)) baseEQ
+  testProve "Base.MemEq" (Eq TT TT Base) (baseMEMEQ `next` ceqREFL)
   testProve "Base.MemEq"
     (Eq (Ap (Lam (Var 0)) TT) TT Base)
-    (memEq `next` ceqStep `next` ceqRefl)
+    (baseMEMEQ `next` ceqSTEP `next` ceqREFL)
 
-  {-
   testProve "Base.ElimEq"
-    (Pi (Eq TT Unit Base) (Ceq TT Unit))
-    (Pi.Intro 0 `splitTac`
-     [ Eq.Eq `splitTac` [Base.Eq, Base.MemEq `next` Ceq.Refl, Base.MemEq `next` Ceq.Refl]
-     , Base.ElimEq 0 `next` General.Hyp 0
+    (Pi (Eq TT Unit Base) (CEq TT Unit))
+    (piINTRO 0 `splitTac`
+     [ eqEQ `splitTac` [baseEQ, baseMEMEQ `next` ceqREFL, baseMEMEQ `next` ceqREFL]
+     , baseELIMEQ 0 `next` generalHYP 0
     ])
+  {-
   -}
   putStrLn "Done!"

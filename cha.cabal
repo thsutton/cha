@@ -25,6 +25,12 @@ executable cha
                      , Interp
                      , Refiner
                      , Rules
+                     , Rules.Base
+                     , Rules.Ceq
+                     , Rules.Eq
+                     , Rules.General
+                     , Rules.Pi
+                     , Rules.Utils
                      , Tactic
                      , Term
   default-language:    Haskell2010
