@@ -13,6 +13,7 @@ cache:
   - $HOME/.ghc
   - $HOME/.cabal
   - $HOME/.stack
+  - $HOME/.local
 
 notifications:
   email:
@@ -66,4 +67,5 @@ install:
 - stack --no-terminal --install-ghc $ARGS test --only-dependencies
 
 script:
-- stack --no-terminal $ARGS test --haddock --no-haddock-deps
+- stack --no-terminal $ARGS test --flag cha:coind --haddock --no-haddock-deps
+- stack --no-terminal $ARGS exec cha

@@ -8,7 +8,7 @@ import Data.Functor
 import Data.Monoid
 
 -- | A backtracking monad implemented with CPS.
-newtype TacticM r a = TacticM { cont :: (a -> Maybe r) -> Maybe r }
+newtype TacticM r a = TacticM { cont :: (a -> Either String r) -> Either String r }
 
 instance Functor (TacticM r) where
     fmap f (TacticM cont) = TacticM $ \k -> cont (k . f)
@@ -18,21 +18,21 @@ instance Applicative (TacticM r) where
     (TacticM f) <*> (TacticM a) = TacticM $ \k -> f (\fv -> a (\av -> k (fv av)))
 
 instance Alternative (TacticM r) where
-    empty = TacticM $ const Nothing
+    empty = TacticM $ const (Left "")
     (TacticM a) <|> (TacticM b) = TacticM $ \k ->
                                   case a k of
-                                    Nothing -> b k
+                                    Left _ -> b k
                                     r -> r
 
 instance Monad (TacticM r) where
     return g = TacticM $ \k -> k g
-    fail e = TacticM $ const Nothing
+    fail e = TacticM $ const (Left e)
     (TacticM a) >>= f = TacticM $ \k -> a (\av -> (cont $ f av) k)
 
 instance MonadPlus (TacticM r)
 
-runTacticM :: TacticM a a -> Maybe a
-runTacticM t = cont t $ Just
+runTacticM :: TacticM a a -> Either String a
+runTacticM t = cont t $ Right
 
 -- | A 'Result' is a specification of what is left to be proved (the
 -- `goals`) and a way of combining derivations which satisfy those

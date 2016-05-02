@@ -4,6 +4,7 @@ module Term where
 import           Control.Applicative
 import           Control.Monad.State hiding (lift)
 import           Data.Functor
+import           Data.Maybe          (fromMaybe)
 import           Data.Monoid         hiding (Sum)
 import qualified Data.Set            as Set
 
@@ -65,7 +66,7 @@ newName = do
 boundName :: Int -> State PrSt String
 boundName i = do
   s <- gets nameStack
-  return (s !! i)
+  return . fromMaybe ("x_" <> show i) $ lookup i (zip [0..] s)
 
 pretty :: Term -> String
 pretty t = pretty' ((\n -> "x" <> show n) <$> [1..]) t

@@ -19,7 +19,7 @@ extract deriv =
         SIG_EQ{} -> TT
         ZERO_EQ -> TT
         SUCC_EQ{} -> TT
-        REC_EQ{} -> TT
+        NATREC_EQ{} -> TT
         UNIT_EQ -> TT
         TT_EQ -> TT
         EQ_EQ{} -> TT

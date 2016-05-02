@@ -12,15 +12,15 @@ data Result
              , provedExtract    :: Term
              }
     | Incomplete [Goal]
-    | Failed
+    | Failed String
   deriving (Eq, Show)
 
 prove :: Term -> Tactic Derivation Goal -> Result
 prove thm tac =
     case runTacticM (tac (Goal [] thm)) of
-        Just (Tactic.Result {resultGoals=[], resultEvidence=evidence}) ->
+        Right (Tactic.Result {resultGoals=[], resultEvidence=evidence}) ->
             Proved { provedDerivation = evidence []
                    , provedExtract = extract (evidence [])
                    }
-        Just (Tactic.Result {resultGoals=goals} ) -> Incomplete goals
-        Nothing -> Failed
+        Right (Tactic.Result {resultGoals=goals} ) -> Incomplete goals
+        Left e -> Failed e

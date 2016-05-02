@@ -29,7 +29,10 @@ executable cha
                      , Rules.Ceq
                      , Rules.Eq
                      , Rules.General
+                     , Rules.Nat
                      , Rules.Pi
+                     , Rules.Uni
+                     , Rules.Unit
                      , Rules.Utils
                      , Tactic
                      , Term

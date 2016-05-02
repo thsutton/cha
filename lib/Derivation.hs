@@ -20,7 +20,7 @@ data Derivation
     | NAT_ELIM Int Derivation Derivation -- BINDS
     | ZERO_EQ
     | SUCC_EQ Derivation
-    | REC_EQ Derivation Derivation Derivation -- BINDS
+    | NATREC_EQ Derivation Derivation Derivation -- BINDS
     | UNIT_EQ
     | TT_EQ
     | UNIT_INTRO

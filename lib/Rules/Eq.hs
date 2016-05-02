@@ -31,13 +31,30 @@ eqEQ (Goal ctx t) =
 --   H >> a = b in A
 -- Uses: EQ_MEM_EQ
 eqMEMEQ :: PrlTactic
-eqMEMEQ (Goal ctx t) = error "Eq.MEMEQ: Not implemented!"
+eqMEMEQ (Goal ctx t) =
+    case t of
+        Eq TT TT (Eq m n a) -> return $ Result
+            { resultGoals = [ Goal ctx (Eq m n a) ]
+            , resultEvidence = \d -> case d of
+                [d] -> EQ_MEM_EQ d
+                _ -> error "Eq.MEMEQ: Invalid evidence!"
+            }
+        _ -> fail "Eq.MEMEQ does not apply."
+
 
 -- H >> a = b in A
 --   H >> b = a in A
 -- Uses: EQ_SYM
 eqSYM :: PrlTactic
-eqSYM (Goal ctx t) = error "Eq.SYM: Not implemented!"
+eqSYM (Goal ctx t) =
+    case t of
+      Eq m n a -> return $ Result
+          { resultGoals = [ Goal ctx (Eq n m a) ]
+          , resultEvidence = \d -> case d of
+              [d] -> EQ_SYM d
+              _ -> error "Eq.SYM: Invalid evidence!"
+          }
+      _ -> fail "Eq.SYM does not apply."
 
 -- H >> [a/x]C
 --   H, x : A >> C in U(i)
@@ -47,4 +64,15 @@ eqSYM (Goal ctx t) = error "Eq.SYM: Not implemented!"
 -- Note that first supplied term should be a = b in A and
 -- the second one should be C.
 eqSUBST :: Universe -> Term -> Term -> PrlTactic
-eqSUBST uni v w (Goal ctx t) = error "Eq.SUBST: Not implemented!"
+eqSUBST uni eq pat (Goal ctx t) =
+    case eq of
+      Eq m n a | subst m 0 pat == t -> return $ Result
+          { resultGoals = [ Goal (a <:> ctx) (Eq pat pat (Uni uni))
+                          , Goal ctx eq
+                          , Goal ctx (subst n 0 pat)
+                          ]
+          , resultEvidence = \d -> case d of
+              [d1, d2, d3] -> EQ_SUBST uni pat d1 d2 d3
+              _ -> error "Eq.SUBST: Invalid evidence!"
+          }
+      _ -> fail "Eq.SUBST does not apply."
