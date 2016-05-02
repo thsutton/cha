@@ -20,6 +20,18 @@ Foundations for Programming Languages (draft of the 2nd edition). I've
 included these as we've just covered them in [PLATYPUS][3] (a type
 theory reading group in Sydney).
 
+Running
+=======
+
+Cha can be built with `stack` and, probably, other tools but I only
+use `stack`. To build and test cha, and to run a number of example
+proofs through the refined, run the following commands:
+
+````
+stack test --flag cha:coind
+stack exec cha
+````
+
 [1]: https://github.com/jozefg/miniprl
 [2]: https://www.cs.cmu.edu/~rwh/
 [3]: https://github.com/CommBank/PLATYPUS
