@@ -12,21 +12,11 @@ import Term
 generalWITNESS :: Term -> PrlTactic
 generalWITNESS w (Goal ctx t) =
     return $ Result
-        { resultGoals = [ Goal ctx (Eq e e t) ]
+        { resultGoals = [ Goal ctx (Eq w w t) ]
         , resultEvidence = \d -> case d of
             [d] -> WITNESS w d
             _ -> error "General.WITNESS: Invalid evidence!"
         }
-
-{-
--- TODO: Custom operators
-
--- H >> C
---   opid is a lemma proving L
---   H, L >> C
--- Uses: CUT
-generalCUT :: RefinerConfig -> Guid -> PrlTactic
--}
 
 -- H >> C
 --   H(i) = C
@@ -44,14 +34,29 @@ generalHYP target (Goal ctx t) =
                 }
         _ -> fail "General.HYP does not apply."
 
-
 -- H >> C
 --   H(i) = C
 -- Uses: VAR_EQ
 generalHYPEQ :: PrlTactic
+generalHYPEQ (Goal ctx t) =
+    case t of
+        Eq (Var i) (Var j) a | i == j && nth (irrelevant t) i ctx == Just a ->
+            return $ Result
+                { resultGoals = []
+                , resultEvidence = \d -> case d of
+                    [] -> VAR_EQ
+                    _ -> error "General.HYPEQ: Invalid evidence!"
+                }
+        _ -> fail "General.HYPEQ does not apply."
 
 {-
 -- TODO Customer operators
+
+-- H >> C
+--   opid is a lemma proving L
+--   H, L >> C
+-- Uses: CUT
+generalCUT :: RefinerConfig -> Guid -> PrlTactic
 
 -- There isn't a nice rule for this really. This rule
 -- finds every occurence of the Guid given and expands
