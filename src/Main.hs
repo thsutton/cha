@@ -36,7 +36,7 @@ mustProve :: String -> Term -> Tactic Derivation Goal -> Either String Term
 mustProve msg a b =
     case prove a b of
         Proved _ e -> Right e
-        Incomplete _ -> Left (msg <> ": got imcomplete!")
+        Incomplete e -> Left (msg <> ": got incomplete!" <> show e)
         Failed e -> Left (msg <> ": got failed: " <> e)
 
 mustFail :: String -> Term -> Tactic Derivation Goal -> Either String Term
