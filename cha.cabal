@@ -16,10 +16,9 @@ flag coind
   description: Include co/inductive types
   default: False
 
-executable cha
-  hs-source-dirs:      src, lib
-  main-is:             Main.hs
-  other-modules:       Derivation
+library
+  hs-source-dirs:      lib
+  exposed-modules:     Derivation
                      , Extract
                      , Goal
                      , Interp
@@ -44,6 +43,17 @@ executable cha
   build-depends:       base >= 4.7 && < 5
                      , containers
                      , mtl
+
+test-suite             examples
+  default-language:    Haskell2010
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Examples.hs
+  default-extensions:  CPP
+  if flag(coind)
+    cpp-options: -DFLAG_coind
+  build-depends:       base
+                     , cha
 
 test-suite             hlint-check
   default-language:    Haskell2010

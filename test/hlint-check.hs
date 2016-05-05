@@ -6,7 +6,6 @@ import System.Exit            (exitFailure, exitSuccess)
 arguments :: [String]
 arguments =
     [ "lib"
-    , "src"
     , "test"
     ]
 

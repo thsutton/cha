@@ -66,10 +66,15 @@ newName = do
 boundName :: Int -> State PrSt String
 boundName i = do
   s <- gets nameStack
-  return . fromMaybe ("x_" <> show i) $ lookup i (zip [0..] s)
+  case lookup i (zip [0..] s) of
+    Just n -> return n
+    Nothing -> newName
 
 pretty :: Term -> String
-pretty t = pretty' ((\n -> "x" <> show n) <$> [1..]) t
+pretty t = pretty' names t
+  where
+    names = [0..] >>= \n -> [ x <> (replicate n '\'') | x <- ["x","y","z"]]
+    names' = (\n -> "x_" <> show n) <$> [1..]
 
 pretty' :: [String] -> Term -> String
 pretty' supply t = evalState (prettyPrint t) (PrSt supply [])
@@ -105,10 +110,10 @@ prettyPrint t =
              a' <- prettyPrint a
              b' <- scope (prettyPrint b)
              return $ "Sigma(" <> a' <> "; " <> b' <> ")"
-      Zero -> pure "Z"
+      Zero -> pure "zero"
       Succ n -> do
              n' <- prettyPrint n
-             return $ "S(" <> n' <> ")"
+             return $ "succ(" <> n' <> ")"
       NatRec n z s -> do
              n' <- prettyPrint n
              z' <- scope (prettyPrint z)
@@ -129,7 +134,7 @@ prettyPrint t =
              b' <- prettyPrint b
              return ("ceq(" <> a' <> "; " <> b' <> ")")
       Base -> pure "Base"
-      Uni i -> pure ("uni" <> show i)
+      Uni i -> pure ("Uni(" <> show i <> ")")
       Per p -> do
              p' <- scope (scope (prettyPrint p))
              return ("Per(" <> p' <> ")")
