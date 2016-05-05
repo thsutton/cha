@@ -32,12 +32,13 @@ numeral n
     | n == 0    = Fold nat (InR Unit)
     | n  < 0    = error "No numerals less than zero"
     | otherwise = Fold nat (InL (numeral $ n - 1))
+#endif
 
 mustProve :: String -> Term -> Tactic Derivation Goal -> Either String Term
 mustProve msg a b =
     case prove a b of
         Proved _ e -> Right e
-        Incomplete e -> Left (msg <> ": got incomplete! Remaining goals:\n" <> unlines (map show e))
+        Incomplete e -> Left (msg <> ": got incomplete! Remaining goals:\n" <> unlines (fmap show e))
         Failed e -> Left (msg <> ": got failed: " <> e)
 
 mustFail :: String -> Term -> Tactic Derivation Goal -> Either String Term
@@ -59,7 +60,6 @@ testProof test name t tac = do
 
 testProve = testProof mustProve
 testFail = testProof mustFail
-#endif
 
 cases :: [Term]
 cases = [ Fst (Pair Unit TT)
@@ -232,14 +232,6 @@ main = do
 
   ps <- mapM (\(n,t,p) -> testProve n t p) theorems
   rs <- mapM (\(n,t,p) -> testFail n t p) nontheorems
-
-#ifdef FLAG_coind
-
-
-
-
-#endif
-
 
   if (and ps && and rs)
     then exitSuccess
