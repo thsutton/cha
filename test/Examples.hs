@@ -78,7 +78,7 @@ cases = [ Fst (Pair Unit TT)
 theorems :: [(String, Term, PrlTactic)]
 theorems =
   [
-    -- Base tests
+  -- Base tests
 
     ( "Base.Eq"
     , (Eq Base Base (Uni 0))
@@ -108,8 +108,7 @@ theorems =
        ])
     )
 
-
-    -- Ceq tests
+  -- Ceq tests
 
   , ( "Ceq.Refl"
     , (CEq (Var 0) (Var 0))
@@ -200,7 +199,7 @@ theorems =
          , ceqSTEP `next` ceqREFL]])
     )
 
-    -- Sigma
+  -- Sigma
 
   , ( "Sigma.Eq"
     , (Eq (Sigma Nat Base) (Sigma Nat Base) (Uni 0))
