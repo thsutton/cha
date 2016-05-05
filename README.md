@@ -25,11 +25,10 @@ Running
 
 Cha can be built with `stack` and, probably, other tools but I only
 use `stack`. To build and test cha, and to run a number of example
-proofs through the refined, run the following commands:
+proofs through the refined, run the following command:
 
 ````
 stack test --flag cha:coind
-stack exec cha
 ````
 
 [1]: https://github.com/jozefg/miniprl
