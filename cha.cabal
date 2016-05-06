@@ -44,6 +44,14 @@ library
                      , containers
                      , mtl
 
+test-suite             check-hlint
+  default-language:    Haskell2010
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             check-hlint.hs
+  build-depends:       base
+                     , hlint
+
 test-suite             examples
   default-language:    Haskell2010
   type:                exitcode-stdio-1.0
@@ -54,11 +62,3 @@ test-suite             examples
     cpp-options: -DFLAG_coind
   build-depends:       base
                      , cha
-
-test-suite             hlint-check
-  default-language:    Haskell2010
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             hlint-check.hs
-  build-depends:       base
-                     , hlint
