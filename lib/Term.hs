@@ -59,8 +59,8 @@ data PrSt = PrSt { nameSupply :: [String], nameStack :: [String] }
 
 newName :: State PrSt String
 newName = do
-  PrSt (n:n') s <- get
-  put (PrSt n' (n:s))
+  PrSt (n:ns) s <- get
+  put (PrSt ns (n:s))
   return n
 
 boundName :: Int -> State PrSt String
@@ -74,7 +74,6 @@ pretty :: Term -> String
 pretty t = pretty' names t
   where
     names = [0..] >>= \n -> [ x <> (replicate n '\'') | x <- ["x","y","z"]]
-    names' = (\n -> "x_" <> show n) <$> [1..]
 
 pretty' :: [String] -> Term -> String
 pretty' supply t = evalState (prettyPrint t) (PrSt supply [])
